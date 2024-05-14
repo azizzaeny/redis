@@ -1,0 +1,27 @@
+{
+  "name": "@zaeny/redis",
+  "version": "1.0.0",
+  "description": "Utility functions wrap redis node.js driver",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/azizzaeny/redis.git"
+  },
+  "keywords": [
+    "redis",
+    "utility",
+    "function"
+  ],
+  "author": "aziz zaeny",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/azizzaeny/redis/issues"
+  },
+  "homepage": "https://github.com/azizzaeny/redis#readme",
+  "dependencies": {
+    "redis": "^4.6.13"
+  }
+}

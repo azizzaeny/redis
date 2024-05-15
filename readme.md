@@ -36,13 +36,30 @@ command(['json.set', 'foo', '$', {data: 1}], client)
 command(['json.mget', 'foo', 'bar', '$'], client)
 ```
 
+blocking read and stream reading
+
+```js
+reader(['xreadgroup', 'mystream', 'group1', 'consumer1', '100', '0', '0'], (data)=> console.log(data), rs);
+reader(['xread', 'mystream', '100', '0', '0'], (data)=> console.log(data), rs);
+
+command(['xadd', 'mystream', {data: '1'}], rs)
+command(['xadd', 'mystream', ['data', '1']], rs);  
+```
+
+closing stream 
+
+```js
+var mystream = reader(['xread', 'mystream', '100', '0', '0'], (data)=> console.log(data), rs);
+mystream.close();
+```
 
 ### API
 
 ```js
 createRedis,
 connectRedis,
-command
+command,
+reader,
 ```
 
 ### Related work
@@ -50,4 +67,4 @@ command
 
 ### Changes
  - [1.0.0] add `command` and basic parsing json
-
+ - [1.0.1] add blocking `reader` to support basic `xread` and `xreadgroup`

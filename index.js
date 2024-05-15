@@ -1,19 +1,5 @@
-
 var first = (seq) => seq[0];
-var lowerCase = (str) =>  str.toLowerCase();
-var isFn = (value) => typeof value === 'function';
-var isString = (value) => typeof value === 'string';
-var concat=(...args)=>{
-  let [arr1, ...rest] = args;
-  if (args.length === 1) {
-    return (...rest) => concat(arr1, ...rest);
-  }
-  return arr1.concat(...rest)
-}
-var peek = (stack) => stack[stack.length - 1];
-var pop = (stack) => stack.slice(0, -1);
-var rest = (seq) => seq.slice(1);
-var isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+var second = ([_, x]) => x;
 var map = (...args) =>{
   let [fn, arr] = args;
   if (args.length === 1) {
@@ -21,9 +7,69 @@ var map = (...args) =>{
   }
   return arr.map(fn);
 }
-
+var concat=(...args)=>{
+  let [arr1, ...rest] = args;
+  if (args.length === 1) {
+    return (...rest) => concat(arr1, ...rest);
+  }
+  return arr1.concat(...rest)
+}
+var merge = (...args) => {
+  let [obj1, obj2] = args;
+  if(args.length === 1) return (obj1) => merge(obj1, obj2);
+  return Object.assign({}, ...args);
+}
+var getIn =(...args) =>{
+  let [coll, keys] = args;
+  if(args.length === 2){
+    return keys.reduce((acc, key) =>{
+      if(acc && typeof acc === "object" && key in acc){
+        return acc[key];
+      }else{
+        return undefined;
+      }
+    }, coll);
+  }else{
+    return (keysA) => getIn(coll, keysA);
+  }
+}
+var isGt = (a, b) => a > b;
+var rest = (seq) => seq.slice(1);
+var isFn = (value) => typeof value === 'function';
+var isString = (value) => typeof value === 'string';
+var isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+var lowerCase = (str) =>  str.toLowerCase();
+var upperCase = (str) =>  str.toUpperCase();
+var seq = (arg) =>{
+  if(Array.isArray(arg)){
+    return arg;
+  }
+  if(typeof arg === "object"){
+    return Object.entries(arg);
+  }
+  if(typeof arg === "string"){
+    return Array.from(arg);
+  }
+  return arg;
+}
+var flatten =(...args) => {
+  let [arr, level] = args;
+  if(args.length === 1){
+    level = Infinity;
+  }
+  return arr.flat(level);
+}
+var pop = (stack) => stack.slice(0, -1);
+var peek = (stack) => stack[stack.length - 1];
+var identity = (x) => x;
+var toString = (k) => k.toString();
 var stringify = (data) => {
   return isObject(data) ? JSON.stringify(data) : (!isString(data) ? data.toString() : data);
+}
+
+var parseData = (data) => {
+  if (isObject(data)) return map(toString, flatten(seq(data)))
+  return data;
 }
 
 var parseResult = (type) => (result) => {
@@ -51,7 +97,27 @@ var commandType = {
     let path = peek(args) || '$';
     let keys = pop(rest(args));    
     return concat(['JSON.MGET'], keys, path);
-  }
+  },
+  'xadd': (args)=> {
+    let [_, key, data, length] = args;
+    if(length) return concat(['xadd', key, 'maxlen', toString(length), '*'], parseData(data));
+    return concat(['xadd', key, '*'], parseData(data));
+  },
+  'xread': (args) => {
+    let [_, key, count="1", timeout="0", start="0" ] = args;
+    return ['xread', 'count', count, 'block', timeout, 'streams', key, start];
+  },
+  'xreadgroup': (args) => {
+    let [_, key, group, consumer, count="1", timeout="0", start=">"  ] = args;
+    return [
+      'xreadgroup', 'group', group, consumer,
+      'count', count, 'block', timeout, 'streams', key, start
+    ];    
+  },  
+  'xgroup': (args) => {
+    let [_, key, group, target='$' ] = args;
+    return ['xgroup', 'create', key, group, target, 'MKSTREAM']
+  },
 }
 
 var transformCommand = (commands) => {
@@ -73,10 +139,54 @@ var createRedis = (url) => require('redis').createClient({ url });
 
 var connectRedis = (client, onError) => {
   if(!onError) onError = ((err) => console.log('redis error'));
-  // client.on('error', onError);
   return client.connect();  
 }
 
 var disconnectRedis = (client) => client.disconnect();
 
-module.exports = {command, createRedis, connectRedis, disconnectRedis};
+var reader = (...args) => {
+  let [cmd, callback, currentClient] = args;
+  let closed = false; // shared state  
+  let $xreadgroup = (cmd, client, cb) => {
+    let block = () => (!closed ? $xreadgroup(concat(pop(cmd), '>'), client, cb) : null);    
+    return command(cmd, client).then((stream)=>{
+      if(!stream) return block();
+      let [[_, data]] = stream;
+      if(!data || data.length === 0) return block();
+      cb(data); // process, todo, ack
+      return block();
+    }).catch((err) => (console.log(err),  block()));
+  };
+  let $xread = (cmd, client, cb) => {
+    let block = () => (!closed ? $xread(cmd, client, cb) : null);
+    return command(cmd, client).then((stream)=>{
+      if(!stream) return block();
+      let [[_, data]] = stream;
+      if(!data || data.length === 0) return block();
+      let lastId = data[data.length -1][0];
+      cb(data);
+      return (!closed ? $xread(concat(pop(cmd), lastId), client, cb) : null);
+    }).catch((err) => (console.log(err),  block()));
+  };  
+  let type = lowerCase(first(cmd));  
+  let blockType = {
+    'xreadgroup': $xreadgroup,
+    'xread': $xread,  
+  };  
+  let processor = blockType[type];
+  if(!processor) return console.log('unsupported block type');  
+  if(isFn(currentClient)) (currentClient = currentClient());  
+  let client = currentClient.duplicate();  
+  let isTypeGroup = (cmd[0] === 'xreadgroup');
+  let createGroup = (c)=> (cmd[0] === 'xreadgroup' ? command(['xgroup', cmd[1], cmd[2],'$'], client).catch(identity) : c );
+  let processCommand = () => (!closed ? processor(cmd, client, callback) : null);
+  client.connect().then(createGroup).then(processCommand).catch((err)=> (closed = true, console.log(err)));
+  return {
+    close : () => {
+      if(closed === false) return (closed = true, client.disconnect());
+      return (closed = true, null)
+    }
+  }
+}
+
+module.exports = {reader, command, createRedis, connectRedis, disconnectRedis};

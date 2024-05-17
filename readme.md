@@ -7,7 +7,6 @@
 
 wrap redis node.js driver expose command function and parse returned if json command specific
 
-
 - [Geting Started](#getting-started)
 - [Usage](#usage)
 - [API](#api)
@@ -60,6 +59,7 @@ createRedis,
 connectRedis,
 command,
 reader,
+parsePair,
 ```
 
 ### Related work
@@ -68,3 +68,4 @@ reader,
 ### Changes
  - [1.0.0] add `command` and basic parsing json
  - [1.0.1] add blocking `reader` to support basic `xread` and `xreadgroup`
+ - [1.0.2] add `parsePair` parsing tupple return from redis into object js

@@ -62,14 +62,24 @@ var flatten =(...args) => {
 var pop = (stack) => stack.slice(0, -1);
 var peek = (stack) => stack[stack.length - 1];
 var identity = (x) => x;
-var toString = (k) => k.toString();
-var stringify = (data) => {
-  return isObject(data) ? JSON.stringify(data) : (!isString(data) ? data.toString() : data);
+var reduce = (...args) => {
+  let [reducer, initialValue, arr] = args;
+  if(args.length === 1){
+    return coll => reduce(reducer, null, coll);
+  }
+  if (args.length === 2) {
+    return coll => reduce(reducer, initialValueHolder, coll)
+  }
+  return arr.reduce(reducer, initialValue)
 }
-
 var parseData = (data) => {
   if (isObject(data)) return map(toString, flatten(seq(data)))
   return data;
+}
+
+var toString = (k) => k.toString();
+var stringify = (data) => {
+  return isObject(data) ? JSON.stringify(data) : (!isString(data) ? data.toString() : data);
 }
 
 var parseResult = (type) => (result) => {
@@ -189,4 +199,17 @@ var reader = (...args) => {
   }
 }
 
-module.exports = {reader, command, createRedis, connectRedis, disconnectRedis};
+// returned ft.search is hard to parse because of tupple so we provide this functions
+var parsePair = (data) => reduce((acc, curr, index, arr)=>{
+  if(isEven(index)){
+    let key   = (curr.startsWith('$.') ? curr.substring(2) : curr);
+    let value = arr[index + 1]; // next pair
+    if(value.startsWith('{') || value.startsWith('[')){
+      try{ value = JSON.parse(value); }catch(err){ }
+    }
+    (acc[key] = value);
+  }
+  return acc;
+}, {}, data);
+
+module.exports = { reader, command, createRedis, connectRedis, disconnectRedis, parsePair };

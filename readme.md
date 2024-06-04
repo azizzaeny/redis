@@ -70,3 +70,4 @@ parsePair,
  - [1.0.1] add blocking `reader` to support basic `xread` and `xreadgroup`
  - [1.0.2] add `parsePair` parsing tupple return from redis into object js
  - [1.0.3] fix `parsePair` `isEven` is not defined
+ - [1.0.4] add `retry_strategy` reconnecting, add `tfload`, `tfcall`

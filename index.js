@@ -148,10 +148,46 @@ var command = (...args) =>{
   return client.sendCommand(adaptCommand).then(parseResult(type));
 }
 
-var createRedis = (url) => require('redis').createClient({ url });
+var tfload = (pathFile, client) => command(['TFUNCTION', 'LOAD', 'REPLACE', require('fs').readFileSync(`${pathFile}`,'utf8')], client);
 
-var connectRedis = (client, onError) => {
-  if(!onError) onError = ((err) => console.log('redis error'));
+var tfcall = (...args) =>{
+  let [libMethod, ...restArgs] = args;
+  let client = peek(restArgs); 
+  let arg = pop(rest(restArgs));
+  return command(concat(['TFCALLASYNC', libMethod], arg), client);
+}
+
+
+var retry_strategy = (options) => {
+  if (options.error && options.error.code === 'ECONNREFUSED') {
+    // End reconnecting on a specific error and flush all commands with a individual error
+    console.error('The server refused the connection');
+    return new Error('The server refused the connection');
+  }
+  if (options.total_retry_time > 1000 * 60 * 60) {
+    // End reconnecting after a specific timeout and flush all commands with a individual error
+    console.error('Retry time exhausted');
+    return new Error('Retry time exhausted');
+  }
+  if (options.attempt > 10) {
+    // End reconnecting with built in error
+    console.error('Too many attempts');
+    return undefined;
+  }
+  // Reconnect after
+  return Math.min(options.attempt * 100, 3000);
+}
+
+var createRedis = (url, options={}) => {
+  let opt = merge({ url }, {retry_strategy }, options);
+  return require('redis').createClient(opt);  
+}
+
+var connectRedis = (client, onError, onReconnect) => {
+  if(!onError) onError = ((err) => console.log('redis error', err));
+  if(!onReconnect) onReconnect = ((details) =>  console.log('Redis reconnecting ...'));  
+  client.on('error', onError);
+  client.on('reconnecting', onReconnect);
   return client.connect();  
 }
 
@@ -163,7 +199,6 @@ var reader = (...args) => {
   let $xreadgroup = (cmd, client, cb) => {
     let block = () => (!closed ? $xreadgroup(concat(pop(cmd), '>'), client, cb) : null);    
     return command(cmd, client).then((stream)=>{
-      console.log('st',stream);      
       if(!stream) return block();
       let [[_, data]] = stream;
       if(!data || data.length === 0) return block();
@@ -192,9 +227,8 @@ var reader = (...args) => {
   if(isFn(currentClient)) (currentClient = currentClient());  
   let client = currentClient.duplicate();  
   let isTypeGroup = (cmd[0] === 'xreadgroup');
-  let createGroup = (c)=> (cmd[0] === 'xreadgroup' ? command(['xgroup', cmd[1], cmd[2],'$'], client).catch((err)=> console.log('err', err)).then(()=> console.log('group created')) : c );
+  let createGroup = (c)=> (cmd[0] === 'xreadgroup' ? command(['xgroup', cmd[1], cmd[2],'$'], client).catch(identity) : c );
   let processCommand = () => {
-    console.log('processing');
     return (!closed ? processor(cmd, client, callback) : null);
   }
   client.connect().then(createGroup).then(processCommand).catch((err)=> (closed = true, console.log(err)));
@@ -206,17 +240,16 @@ var reader = (...args) => {
   }
 }
 
-// returned ft.search is hard to parse because of tupple so we provide this functions
 var parsePair = (data) => reduce((acc, curr, index, arr)=>{
   if(isEven(index)){
     let key   = (curr.startsWith('$.') ? curr.substring(2) : curr);
-    let value = arr[index + 1]; // next pair
+    let value = arr[index + 1];
     if(value.startsWith('{') || value.startsWith('[')){
-      try{ value = JSON.parse(value); }catch(err){ }
+      try{ value = JSON.parse(value); }catch(err){ value=null }
     }
     (acc[key] = value);
   }
   return acc;
 }, {}, data);
 
-module.exports = { reader, command, createRedis, connectRedis, disconnectRedis, parsePair };
+module.exports = { reader, command, createRedis, connectRedis, disconnectRedis, parsePair, tfload, tfcall };

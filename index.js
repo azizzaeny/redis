@@ -1,3 +1,6 @@
+var isEven =(x) => {
+  return x % 2 === 0;
+}
 var first = (seq) => seq[0];
 var second = ([_, x]) => x;
 var map = (...args) =>{
@@ -140,7 +143,7 @@ var command = (...args) =>{
   let [commands, client] = args;
   if (args.length === 1) return (client) => command(commands, client);
   let type = lowerCase(first(commands));  
-  let adaptCommand = transformCommand(commands);
+  let adaptCommand = transformCommand(commands);  
   if(isFn(client)) (client = client());
   return client.sendCommand(adaptCommand).then(parseResult(type));
 }
@@ -160,6 +163,7 @@ var reader = (...args) => {
   let $xreadgroup = (cmd, client, cb) => {
     let block = () => (!closed ? $xreadgroup(concat(pop(cmd), '>'), client, cb) : null);    
     return command(cmd, client).then((stream)=>{
+      console.log('st',stream);      
       if(!stream) return block();
       let [[_, data]] = stream;
       if(!data || data.length === 0) return block();
@@ -188,8 +192,11 @@ var reader = (...args) => {
   if(isFn(currentClient)) (currentClient = currentClient());  
   let client = currentClient.duplicate();  
   let isTypeGroup = (cmd[0] === 'xreadgroup');
-  let createGroup = (c)=> (cmd[0] === 'xreadgroup' ? command(['xgroup', cmd[1], cmd[2],'$'], client).catch(identity) : c );
-  let processCommand = () => (!closed ? processor(cmd, client, callback) : null);
+  let createGroup = (c)=> (cmd[0] === 'xreadgroup' ? command(['xgroup', cmd[1], cmd[2],'$'], client).catch((err)=> console.log('err', err)).then(()=> console.log('group created')) : c );
+  let processCommand = () => {
+    console.log('processing');
+    return (!closed ? processor(cmd, client, callback) : null);
+  }
   client.connect().then(createGroup).then(processCommand).catch((err)=> (closed = true, console.log(err)));
   return {
     close : () => {

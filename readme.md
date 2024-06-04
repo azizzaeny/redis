@@ -69,3 +69,4 @@ parsePair,
  - [1.0.0] add `command` and basic parsing json
  - [1.0.1] add blocking `reader` to support basic `xread` and `xreadgroup`
  - [1.0.2] add `parsePair` parsing tupple return from redis into object js
+ - [1.0.3] fix `parsePair` `isEven` is not defined

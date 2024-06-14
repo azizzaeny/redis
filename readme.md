@@ -71,3 +71,4 @@ parsePair,
  - [1.0.2] add `parsePair` parsing tupple return from redis into object js
  - [1.0.3] fix `parsePair` `isEven` is not defined
  - [1.0.4] add `retry_strategy` reconnecting, add `tfload`, `tfcall`
+ - [1.0.5] fix json.get return array 

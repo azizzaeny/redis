@@ -88,8 +88,13 @@ var stringify = (data) => {
 var parseResult = (type) => (result) => {
   if(!result) return result;
   if(type === 'json.get'){
-    let res = JSON.parse(result);    
-    return isObject(res) ? res : first(res);
+    try{
+      let res = JSON.parse(result);
+      return res;
+    }catch(err){
+      console.log('Unable to parse result');
+      return {};
+    }    
   }
   if(type === 'json.mget'){
     return map((r) => (r ? first(JSON.parse(r)) : r), result);

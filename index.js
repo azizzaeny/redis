@@ -108,8 +108,8 @@ var commandType = {
     return ['JSON.SET', key, path, stringify(value)];  
   },
   'json.get': (args) =>{
-    let [_, key, path] = args;
-    return (path) ? ['JSON.GET', key, path] : ['JSON.GET', key];
+    let [_, key, ...path] = args;    
+    return (path) ? concat(['JSON.GET', key], path) : ['JSON.GET', key];
   },
   'json.mget': (args) => {
     let path = peek(args) || '$';
